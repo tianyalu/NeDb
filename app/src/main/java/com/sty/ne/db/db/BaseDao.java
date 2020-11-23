@@ -9,8 +9,10 @@ import com.sty.ne.db.annotation.DbField;
 import com.sty.ne.db.annotation.DbTable;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -131,6 +133,96 @@ public class BaseDao<T> implements IBaseDao<T> {
         return sqLiteDatabase.insert(tableName, null, values);
     }
 
+    @Override
+    public long update(T entity, T where) {
+        //将传进来的对象的成员变量和其值转为map
+        Map map = getValues(entity);
+        ContentValues values = getContentValues(map);
+
+        Map whereMap = getValues(where);
+        Condition condition = new Condition(whereMap);
+
+        return sqLiteDatabase.update(tableName, values, condition.whereCause, condition.whereArgs);
+    }
+
+    @Override
+    public int delete(T where) {
+        Map map = getValues(where);
+        Condition condition = new Condition(map);
+
+        return sqLiteDatabase.delete(tableName, condition.whereCause, condition.whereArgs);
+    }
+
+    @Override
+    public List<T> query(T where) {
+        return query(where, null, null, null);
+    }
+
+    @Override
+    public List<T> query(T where, String orderBy, Integer startIndex, Integer limit) {
+        Map map = getValues(where);
+        // select * from tableName limit 0,10;
+        String limitString = null;
+        if(startIndex != null && limit !=null) {
+            limitString = startIndex + " , " + limit;
+        }
+
+        //select * from tableName where id=? and name=? ...
+        //String selections = "id=? and name=? ..."
+        //String selectionArgs = String[]{ "1", "sty", ...}
+        Condition condition = new Condition(map);
+        Cursor cursor = sqLiteDatabase.query(tableName, null, condition.whereCause,
+                condition.whereArgs, null, null, orderBy, limitString);
+
+        //定义解析游标的方法
+        List<T> result = getResult(cursor, where);
+
+        return result;
+    }
+
+    private List<T> getResult(Cursor cursor, T obj) {
+        ArrayList list = new ArrayList();
+        Object item = null;  //User user = null;
+        while (cursor.moveToNext()) {
+            try {
+                item = obj.getClass().newInstance(); //user = new User();
+                Iterator<String> iterator = cacheMap.keySet().iterator();
+                while (iterator.hasNext()) {
+                    //获取列名
+                    String columnName = iterator.next();
+                    //以列名拿到列名在游标中的位置
+                    int columnIndex = cursor.getColumnIndex(columnName);
+                    //获取成员变量的类型
+                    Field field = cacheMap.get(columnName);
+                    Class type = field.getType();
+                    //cursor.getString(columnIndex);
+                    if(columnIndex != -1) {
+                        if(type == String.class) {
+                            //User user = new User();
+                            //user.setId(1); --> id.set(user, 1);
+                            field.set(item, cursor.getString(columnIndex));
+                        }else if(type == Double.class) {
+                            field.set(item, cursor.getDouble(columnIndex));
+                        }else if(type == Integer.class) {
+                            field.set(item, cursor.getInt(columnIndex));
+                        }else if(type == Long.class) {
+                            field.set(item, cursor.getLong(columnIndex));
+                        }else if(type == byte[].class) {
+                            field.set(item, cursor.getBlob(columnIndex));
+                        }
+                    }
+                }
+                list.add(item);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            } catch (InstantiationException e) {
+                e.printStackTrace();
+            }
+        }
+        cursor.close();
+        return list;
+    }
+
     private ContentValues getContentValues(Map<String, String> map) {
         ContentValues contentValues = new ContentValues();
         Set keys = map.keySet();
@@ -142,9 +234,14 @@ public class BaseDao<T> implements IBaseDao<T> {
                 contentValues.put(key, value);
             }
         }
-        return null;
+        return contentValues;
     }
 
+    /**
+     * 把传入对象的属性解析为Map
+     * @param entity
+     * @return
+     */
     private Map<String, String> getValues(T entity) {
         HashMap<String, String> map = new HashMap<>();
         //得到所有的成员变量，user的成员变量
@@ -154,7 +251,7 @@ public class BaseDao<T> implements IBaseDao<T> {
             field.setAccessible(true);
             //获取成员变量的值
             try {
-                Object object = field.get(entity);
+                Object object = field.get(entity); //user.getName() --> field.get(user);
                 if(object == null) {
                     continue;
                 }
@@ -173,5 +270,31 @@ public class BaseDao<T> implements IBaseDao<T> {
             }
         }
         return map;
+    }
+
+    private class Condition {
+        private String whereCause;
+        private String[] whereArgs;
+
+        public Condition(Map<String, String> whereMap) {
+            ArrayList list = new ArrayList();
+            StringBuilder sb = new StringBuilder();
+            sb.append("1=1");
+            //获取所有的字段名
+            Set<String> keys = whereMap.keySet();
+            Iterator<String> iterator = keys.iterator();
+            while (iterator.hasNext()) {
+                String key = iterator.next();
+                String value = whereMap.get(key);
+                if(value != null) {
+                    sb.append(" and ")
+                            .append(key)
+                            .append(" =?");
+                    list.add(value);
+                }
+            }
+            this.whereCause = sb.toString();
+            this.whereArgs = (String[]) list.toArray(new String[list.size()]);
+        }
     }
 }

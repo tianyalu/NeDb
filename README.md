@@ -208,7 +208,7 @@ public class BaseDao<T> implements IBaseDao<T> {
                 contentValues.put(key, value);
             }
         }
-        return null;
+        return contentValues;
     }
 
     private Map<String, String> getValues(T entity) {
