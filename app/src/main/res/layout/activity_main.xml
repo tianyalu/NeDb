@@ -12,7 +12,7 @@
         android:id="@+id/btn_insert"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:text="insert"
         android:textAllCaps="false"/>
 
@@ -20,7 +20,7 @@
         android:id="@+id/btn_select"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:text="select"
         android:textAllCaps="false"/>
 
@@ -28,7 +28,7 @@
         android:id="@+id/btn_update"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:text="update"
         android:textAllCaps="false"/>
 
@@ -36,8 +36,24 @@
         android:id="@+id/btn_delete"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:text="delete"
+        android:textAllCaps="false"/>
+
+    <Button
+        android:id="@+id/btn_login"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="login"
+        android:textAllCaps="false"/>
+
+    <Button
+        android:id="@+id/btn_insert_by_db"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="分库插入"
         android:textAllCaps="false"/>
 
 </LinearLayout>

@@ -285,3 +285,107 @@ BaseDao baseDao = BaseDaoFactory.getInstance().getBaseDao(User.class);
 baseDao.insert(new User(1, "sty", "21212"));
 ```
 
+### 2.4 分库
+
+分库是针对类似`QQ`等多用户登录同一个`APP`的应用场景的，分库可以使数据更纯粹，更易于维护，尤其对于大型应用而言。
+
+#### 2.4.1 实现思路
+
+首先定义一张`user`表作为主表，记录用户登录状态，当某个用户登录后，修改其他用户的登录状态为“未登录”，该用户登录状态为“已登录”。随后以根据该用户的`id创建一个唯一的数据库文件（如果已存在则无需创建），之后的操作仅对该数据库进行。
+
+#### 2.4.2 `UserDao`
+
+```java
+/**
+ * 维护用户的公有数据
+ * @Author: tian
+ * @UpdateDate: 2020/11/23 9:59 PM
+ */
+public class UserDao extends BaseDao<User> {
+    private static final String TAG = UserDao.class.getSimpleName();
+
+    @Override
+    public long insert(User entity) {
+        //查询该表中所有的用户记录
+        List<User> list = query(new User());
+        User where;
+        for (User user : list) {
+            where = new User();
+            where.setId(user.getId());
+            where.setStatus(0);
+            update(user, where);
+            Log.e(TAG, "用户 " + user.getName() + " 更改为未登录状态");
+        }
+        entity.setStatus(1);
+        Log.e(TAG, "用户 " + entity.getName() + " 登录");
+        return super.insert(entity);
+    }
+
+    //获取当前登录的User
+    public User getCurrentUser() {
+        User user = new User();
+        user.setStatus(1);
+        List<User> list = query(user);
+        if(list != null && list.size() > 0) {
+            return list.get(0);
+        }
+        return null;
+    }
+}
+```
+
+#### 2.4.3 `BaseDaoSubFactory`
+
+```java
+public class BaseDaoSubFactory extends BaseDaoFactory {
+    //定义一个用来实现分库的数据库实现
+    protected SQLiteDatabase subSqLiteDatabase;
+    private static class LazyHolder {
+        private static BaseDaoSubFactory instance = new BaseDaoSubFactory();
+    }
+
+    private BaseDaoSubFactory() {
+        super();
+    }
+
+    public static BaseDaoSubFactory getInstance() {
+        return LazyHolder.instance;
+    }
+
+    //生产BaseDao对象
+    public <T extends BaseDao<M>, M> T getBaseDao(Class<T> daoClass, Class<M> entityClass) {
+        BaseDao baseDao = map.get(PrivateDatabaseEnums.database.getValue());
+        if(baseDao != null) {
+            return (T) baseDao;
+        }
+        subSqLiteDatabase = SQLiteDatabase.openOrCreateDatabase(PrivateDatabaseEnums.database.getValue(), null);
+        try {
+            //baseDao = BaseDao.class.newInstance();
+            baseDao = daoClass.newInstance();
+            baseDao.init(subSqLiteDatabase, entityClass);
+            map.put(PrivateDatabaseEnums.database.getValue(), baseDao);
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        }
+        return (T) baseDao;
+    }
+}
+```
+
+#### 2.4.4 使用
+
+```java
+btnInsertByDb.setOnClickListener(new View.OnClickListener() {
+  @Override
+  public void onClick(View v) {
+    Photo photo = new Photo();
+    photo.setPath("/data/data/xxx.jpg");
+    photo.setTime(new Date().toString());
+    PhotoDao photoDao = BaseDaoSubFactory.getInstance().getBaseDao(PhotoDao.class, Photo.class);
+    photoDao.insert(photo);
+  }
+});
+```
+
