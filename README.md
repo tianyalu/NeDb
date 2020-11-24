@@ -389,3 +389,166 @@ btnInsertByDb.setOnClickListener(new View.OnClickListener() {
 });
 ```
 
+### 2.5 数据库升级
+
+#### 2.5.1 升级思路
+
+本地`sp`维护当前数据库版本号，如`V002`，每次登录从后台获取最新的版本号，如`V003`；当需要升级时，从后台下载数据库升级`xml`文件`updateXml.xml`；解析该`xml`文件，然后执行解析`xml`文件得到的`sql`语句：**备份数据库，创建新数据库，将备份表中的数据插入新表中，删除备份数据库**，完成升级。
+
+#### 2.5.2 `updateXml.xml`
+
+```xml
+<!--要保证该文件一定是UTF-8编码-->
+<updateXml>
+    <updateStep
+        versionFrom="V002"
+        versionTo="V003">
+        <updateDb>
+            <!-- 对备份的表重新命名-->
+            <sql_rename>alter table tb_photo rename to bak_tb_photo;</sql_rename>
+            <!-- 创建一个新表 -->
+            <sql_create>
+                create table if not exists tb_photo(
+                    time TEXT,
+                    path TEXT,
+                    name TEXT,
+                    lastUpdateTime TEXT,
+                    user_id Integer primary key
+                );
+            </sql_create>
+            <!-- 将备份表中的数据插入到新表中 -->
+            <sql_insert>
+                insert into tb_photo(time, path) select time,path from bak_tb_photo;
+            </sql_insert>
+            <!-- 删除之前的备份表 -->
+            <sql_delete>
+                drop table if exists bak_tb_photo;
+            </sql_delete>
+        </updateDb>
+    </updateStep>
+</updateXml>
+```
+
+#### 2.5.3 更新数据库管理类`UpdateManager`
+
+```java
+public class UpdateManager {
+    private static final String TAG = UpdateManager.class.getSimpleName();
+    private List<User> userList;
+
+    public void startUpdateDb(Context context) {
+        UserDao userDao = BaseDaoFactory.getInstance().getBaseDao(UserDao.class, User.class);
+        userList = userDao.query(new User());
+        //解析xml文件
+        UpdateXml updateXml = readDbXml(context);
+        //拿到当前的版本信息
+        UpdateStep updateStep = analyseUpdateStep(updateXml);
+        if(updateStep == null) {
+            return;
+        }
+        //获取更新的对象
+        List<UpdateDb> updateDbs = updateStep.getUpdateDbs();
+        for (User user : userList) {
+            //得到每个用户的数据库对象
+            SQLiteDatabase database = getDb(user.getId());
+            if(database == null) {
+                return;
+            }
+            for (UpdateDb updateDb : updateDbs) {
+                String sql_rename = updateDb.getSql_rename();
+                String sql_create = updateDb.getSql_create();
+                String sql_insert = updateDb.getSql_insert();
+                String sql_delete = updateDb.getSql_delete();
+
+                String[] sqls = new String[] {sql_rename, sql_create, sql_insert, sql_delete};
+                executeSql(database, sqls);
+                Log.i(TAG, user.getId() + "用户数据库升级成功");
+            }
+        }
+    }
+
+    private void executeSql(SQLiteDatabase database, String[] sqls) {
+        if(sqls == null || sqls.length == 0) {
+            return;
+        }
+        //事务
+        database.beginTransaction();
+        for (String sql : sqls) {
+            sql = sql.replace("\r\n", " ");
+            sql = sql.replace("\n", " ");
+            if(!"".equals(sql.trim())) {
+                database.execSQL(sql);
+            }
+        }
+        database.setTransactionSuccessful();;
+        database.endTransaction();
+    }
+
+    private SQLiteDatabase getDb(Integer id) {
+        SQLiteDatabase sqlDb = null;
+        File file = new File("data/data/com.sty.ne.db/u_" + id + "_private.db");
+        if(!file.exists()) {
+            Log.e(TAG, file.getAbsolutePath() + "数据库不存在");
+            return null;
+        }
+        return SQLiteDatabase.openOrCreateDatabase(file, null);
+    }
+
+    private UpdateStep analyseUpdateStep(UpdateXml updateXml) {
+        UpdateStep thisStep = null;
+        if(updateXml == null) {
+            return null;
+        }
+        List<UpdateStep> steps = updateXml.getUpdateSteps();
+        if(steps == null || steps.size() == 0) {
+            return null;
+        }
+        for (UpdateStep step : steps) {
+            if(step.getVersionFrom() == null || step.getVersionTo() == null) {
+                //do nothing
+            }else {
+                String[] versionArray = step.getVersionFrom().split(",");
+                if(versionArray != null && versionArray.length > 0) {
+                    for (int i = 0; i < versionArray.length; i++) {
+                        //数据保存在sp里面或者文本文件中，V002代表当前版本信息
+                        //V003应该从服务器获取
+                        if("V002".equalsIgnoreCase(versionArray[i]) &&
+                            step.getVersionTo().equalsIgnoreCase("V003")) {
+                            thisStep = step;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return thisStep;
+    }
+
+    private UpdateXml readDbXml(Context context) {
+        InputStream is = null;
+        Document document = null;
+        try {
+            is = context.getAssets().open("updateXml.xml");
+            DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+            document = builder.parse(is);
+        }catch (Exception e){
+            e.printStackTrace();
+        }finally {
+            if(is != null) {
+                try {
+                    is.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if(document == null) {
+                return null;
+            }
+        }
+
+        UpdateXml xml = new UpdateXml(document);
+        return xml;
+    }
+}
+```
+

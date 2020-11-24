@@ -56,4 +56,12 @@
         android:text="分库插入"
         android:textAllCaps="false"/>
 
+    <Button
+        android:id="@+id/btn_update_version"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="更新版本"
+        android:textAllCaps="false"/>
+
 </LinearLayout>

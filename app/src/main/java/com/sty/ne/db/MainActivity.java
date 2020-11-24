@@ -16,6 +16,7 @@ import com.sty.ne.db.model.Photo;
 import com.sty.ne.db.model.User;
 import com.sty.ne.db.subdb.BaseDaoSubFactory;
 import com.sty.ne.db.subdb.PhotoDao;
+import com.sty.ne.db.update.UpdateManager;
 
 import java.util.Date;
 import java.util.List;
@@ -27,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private Button btnDelete;
     private Button btnLogin;
     private Button btnInsertByDb;
+    private Button btnUpdateVersion;
 
     private int index = 0;
     private UserDao userDao;
@@ -52,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
         btnDelete = findViewById(R.id.btn_delete);
         btnLogin = findViewById(R.id.btn_login);
         btnInsertByDb = findViewById(R.id.btn_insert_by_db);
+        btnUpdateVersion = findViewById(R.id.btn_update_version);
 
         userDao = BaseDaoFactory.getInstance().getBaseDao(UserDao.class, User.class);
     }
@@ -131,6 +134,14 @@ public class MainActivity extends AppCompatActivity {
                 photo.setTime(new Date().toString());
                 PhotoDao photoDao = BaseDaoSubFactory.getInstance().getBaseDao(PhotoDao.class, Photo.class);
                 photoDao.insert(photo);
+            }
+        });
+
+        btnUpdateVersion.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                UpdateManager updateManager = new UpdateManager();
+                updateManager.startUpdateDb(MainActivity.this);
             }
         });
     }
